@@ -1,0 +1,775 @@
+#!/usr/bin/env python3
+"""
+DSA Zero to Hero: 30-Day Bootcamp - site builder.
+
+Usage:   python build.py            -> writes ./docs/index.html and ./index.html
+         python build.py --serve    -> builds, then serves http://localhost:8000
+
+Only the Python standard library is used. Edit the DAYS array inside the HTML
+below (search for "const DAYS=[") to change topics, videos or problems.
+"""
+import sys, pathlib, http.server, socketserver, functools
+
+HTML = r'''<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DSA Zero to Hero: 30-Day Bootcamp</title>
+<meta name="description" content="A 30-day, 6-hours-a-day DSA plan with YouTube lectures and practice problems from LeetCode, Codeforces, CSES, HackerRank, AtCoder, GeeksforGeeks, CodeChef and InterviewBit.">
+<style>
+:root{
+  --bg:#f4efe4;--panel:#fffdf7;--panel2:#f9f4e8;--ink:#1c1a15;--muted:#6b665a;--line:#ded6c3;
+  --accent:#e4572e;--accent-ink:#fff;--ok:#23864f;--shadow:0 1px 0 rgba(0,0,0,.04),0 8px 24px -12px rgba(60,40,10,.25);
+  --w1:#e4572e;--w2:#1f7a6d;--w3:#cf8f12;--w4:#5b4bdb;
+  --display:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+  --ui:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+[data-theme="dark"]{
+  --bg:#12141a;--panel:#1a1d26;--panel2:#20242f;--ink:#ece8dc;--muted:#a09c8c;--line:#2d3240;
+  --accent:#ff7a4d;--accent-ink:#1a1008;--ok:#4cc27f;--shadow:0 1px 0 rgba(255,255,255,.03),0 10px 30px -14px rgba(0,0,0,.7);
+  --w1:#ff7a4d;--w2:#3fc2ad;--w3:#f0b840;--w4:#8f84ff;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:84px}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 var(--ui);
+  background-image:radial-gradient(circle at 12% 0%,rgba(228,87,46,.07),transparent 40%),radial-gradient(circle at 100% 20%,rgba(31,122,109,.07),transparent 45%);
+  background-attachment:fixed;transition:background-color .3s,color .3s}
+a{color:inherit}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:6px}
+.skip{position:absolute;left:-999px;top:8px;background:var(--accent);color:var(--accent-ink);padding:8px 14px;border-radius:8px;z-index:100}
+.skip:focus{left:8px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* header */
+header.top{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.top-in{max-width:1280px;margin:0 auto;display:flex;align-items:center;gap:12px;padding:10px 16px}
+.brand{font:700 1.15rem/1 var(--display);text-decoration:none;display:flex;align-items:center;gap:8px;white-space:nowrap}
+.brand .mark{font:700 .8rem var(--mono);background:var(--ink);color:var(--bg);padding:5px 7px;border-radius:6px;letter-spacing:-.5px}
+nav.main{display:flex;gap:4px;margin-left:12px}
+nav.main a{text-decoration:none;padding:6px 12px;border-radius:999px;font-size:.92rem;color:var(--muted)}
+nav.main a:hover{background:var(--panel2);color:var(--ink)}
+.spacer{flex:1}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:var(--panel)}
+.seg button{border:0;background:none;padding:6px 12px;cursor:pointer;font:600 .8rem var(--mono);color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.iconbtn{border:1px solid var(--line);background:var(--panel);border-radius:999px;width:38px;height:38px;cursor:pointer;display:grid;place-items:center;font-size:1.05rem}
+.iconbtn:hover{border-color:var(--accent)}
+#menuBtn{display:none}
+
+/* layout */
+.shell{max-width:1280px;margin:0 auto;display:grid;grid-template-columns:280px 1fr;gap:28px;padding:20px 16px 80px}
+aside.side{position:sticky;top:78px;align-self:start;max-height:calc(100vh - 92px);overflow:auto;padding-right:6px;scrollbar-width:thin}
+.side h2{font:700 .72rem var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+.sw{margin-bottom:14px}
+.sw-h{display:flex;align-items:center;justify-content:space-between;font:700 .95rem var(--display);padding:6px 8px;border-left:4px solid var(--c);background:var(--panel);border-radius:0 8px 8px 0}
+.sw-h small{font:600 .72rem var(--mono);color:var(--muted)}
+.sw ul{list-style:none;margin:6px 0 0;padding:0}
+.sw a{display:flex;gap:8px;align-items:center;padding:5px 8px;border-radius:8px;text-decoration:none;font-size:.88rem;color:var(--muted)}
+.sw a:hover{background:var(--panel2);color:var(--ink)}
+.sw a .n{font:700 .72rem var(--mono);width:30px;flex:none;color:var(--c)}
+.sw a .t{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sw a .ck{font-size:.8rem;color:var(--ok);width:14px;text-align:center}
+.sw a.today{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--ink);font-weight:600}
+.scrim{display:none}
+
+/* hero */
+.hero{background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:28px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.hero::after{content:"O(n)";position:absolute;right:-6px;top:-22px;font:800 8rem/1 var(--display);color:var(--ink);opacity:.04;pointer-events:none}
+.eyebrow{font:700 .74rem var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.hero h1{font:800 clamp(1.9rem,4.4vw,3.1rem)/1.05 var(--display);margin:6px 0 10px;letter-spacing:-.02em}
+.hero h1 em{font-style:italic;color:var(--accent)}
+.hero p.lead{margin:0 0 20px;color:var(--muted);max-width:62ch}
+.bar{height:14px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);overflow:hidden}
+.bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--w1),var(--w3),var(--w2));transition:width .5s cubic-bezier(.2,.8,.2,1)}
+.barlbl{display:flex;justify-content:space-between;font:600 .8rem var(--mono);color:var(--muted);margin:0 2px 6px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:20px 0}
+.stat{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.stat b{display:block;font:800 1.7rem/1.1 var(--display)}
+.stat span{font:600 .72rem var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.rings{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.ring{display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.ring svg{width:54px;height:54px;flex:none;transform:rotate(-90deg)}
+.ring circle{fill:none;stroke-width:6}
+.ring .bg{stroke:var(--line)}
+.ring .fg{stroke:var(--c);stroke-linecap:round;transition:stroke-dashoffset .5s}
+.ring b{display:block;font:700 .9rem var(--display)}
+.ring small{font:600 .72rem var(--mono);color:var(--muted)}
+.todaybox{margin-top:18px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:14px 16px;border-radius:14px;background:color-mix(in srgb,var(--accent) 12%,var(--panel));border:1px dashed var(--accent)}
+.todaybox .msg{flex:1;min-width:220px}
+.todaybox label{font:600 .8rem var(--mono);color:var(--muted);display:flex;gap:8px;align-items:center}
+input[type=date]{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+.btn{border:1px solid var(--ink);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:10px;cursor:pointer;font-weight:600;font-size:.9rem}
+.btn:hover{transform:translateY(-1px)}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+.btn.ghost:hover{border-color:var(--ink)}
+.btn.accent{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.tools{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+
+/* schedule strip */
+.sched{display:flex;gap:4px;margin:12px 0 4px}
+.sched div{padding:7px 9px;border-radius:8px;font:600 .72rem var(--mono);background:var(--panel2);border:1px solid var(--line);line-height:1.25}
+.sched div:nth-child(1){flex:2;border-top:3px solid var(--w1)}
+.sched div:nth-child(2){flex:1;border-top:3px solid var(--w3)}
+.sched div:nth-child(3){flex:2;border-top:3px solid var(--w2)}
+.sched div:nth-child(4){flex:1;border-top:3px solid var(--w4)}
+.sched b{display:block;color:var(--muted);font-weight:600}
+
+/* filters */
+.filters{position:sticky;top:60px;z-index:20;display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:26px 0 8px;padding:10px;background:color-mix(in srgb,var(--bg) 90%,transparent);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:14px}
+.filters input[type=search],.filters select{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.filters input[type=search]{flex:1;min-width:180px}
+.count{font:600 .78rem var(--mono);color:var(--muted);margin-left:auto}
+
+/* weeks + days */
+.week{margin-top:28px}
+.week-h{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;border-bottom:2px solid var(--c);padding-bottom:6px;margin-bottom:14px}
+.week-h h2{font:800 1.6rem var(--display);margin:0}
+.week-h span{font:600 .8rem var(--mono);color:var(--muted)}
+details.day{background:var(--panel);border:1px solid var(--line);border-left:6px solid var(--c);border-radius:16px;margin-bottom:12px;box-shadow:var(--shadow);transition:border-color .2s}
+details.day[open]{border-color:var(--c)}
+details.day.is-today{outline:2px solid var(--accent);outline-offset:3px}
+details.day.done summary .dn{background:var(--ok);color:#fff}
+details.day summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:14px;padding:14px 16px}
+details.day summary::-webkit-details-marker{display:none}
+.dn{font:800 1.05rem var(--display);background:var(--ink);color:var(--bg);min-width:52px;text-align:center;padding:8px 6px;border-radius:10px}
+.dn small{display:block;font:600 .6rem var(--mono);letter-spacing:.1em;opacity:.7}
+.dt{flex:1;min-width:0}
+.dt h3{margin:0;font:700 1.12rem/1.25 var(--display)}
+.dt p{margin:2px 0 0;font:600 .76rem var(--mono);color:var(--muted)}
+.tag{display:inline-block;font:700 .66rem var(--mono);letter-spacing:.08em;padding:2px 7px;border-radius:999px;background:var(--accent);color:var(--accent-ink);margin-left:6px;vertical-align:middle}
+.chev{transition:transform .25s;color:var(--muted)}
+details[open]>summary .chev{transform:rotate(90deg)}
+.body{padding:2px 18px 18px;border-top:1px dashed var(--line)}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:14px}
+.body h4{font:700 .72rem var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:16px 0 8px}
+.objs{margin:0;padding-left:18px}
+.objs li{margin:3px 0}
+.items{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.items li{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel2);transition:background .2s,opacity .2s}
+.items li.on{opacity:.62}
+.items li.on .nm{text-decoration:line-through;text-decoration-color:var(--muted)}
+.items input[type=checkbox]{width:18px;height:18px;margin-top:3px;accent-color:var(--ok);flex:none;cursor:pointer}
+.items .nm{flex:1;min-width:0}
+.items a{text-decoration:none;font-weight:600;border-bottom:1px solid var(--line)}
+.items a:hover{border-color:var(--accent);color:var(--accent)}
+.items .sub{display:block;font:600 .72rem var(--mono);color:var(--muted);margin-top:1px}
+.pill{font:700 .66rem var(--mono);padding:2px 8px;border-radius:999px;color:#fff;flex:none;margin-top:2px;white-space:nowrap}
+.pill[data-p="LeetCode"]{background:#d98200}
+.pill[data-p="Codeforces"]{background:#1f78b4}
+.pill[data-p="CSES"]{background:#6d4bd8}
+.pill[data-p="HackerRank"]{background:#178a46}
+.pill[data-p="GeeksforGeeks"]{background:#2b7a3e}
+.pill[data-p="CodeChef"]{background:#7a4a22}
+.pill[data-p="AtCoder"]{background:#3b3b3b}
+.pill[data-p="InterviewBit"]{background:#2455c7}
+.df{font:700 .66rem var(--mono);padding:2px 7px;border-radius:6px;flex:none;margin-top:2px}
+.df.Easy{background:rgba(35,134,79,.16);color:var(--ok)}
+.df.Medium{background:rgba(207,143,18,.18);color:#a8730a}
+.df.Hard{background:rgba(214,60,60,.16);color:#c43d3d}
+[data-theme="dark"] .df.Medium{color:#f0b840}[data-theme="dark"] .df.Hard{color:#ff7c7c}
+.srch{font:600 .62rem var(--mono);color:var(--muted);border:1px solid var(--line);padding:0 5px;border-radius:5px;margin-left:6px;vertical-align:middle}
+.reads{display:flex;flex-wrap:wrap;gap:8px}
+.reads a{font-size:.85rem;font-weight:600;text-decoration:none;padding:6px 11px;border:1px solid var(--line);border-radius:999px;background:var(--panel2)}
+.reads a:hover{border-color:var(--accent);color:var(--accent)}
+.tip{font-size:.9rem;background:var(--panel2);border-left:4px solid var(--c);padding:10px 12px;border-radius:0 10px 10px 0}
+.tip code{font:600 .82rem var(--mono)}
+textarea.notes{width:100%;min-height:96px;resize:vertical;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.dayfoot{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:14px}
+.dayfoot .prog{font:600 .78rem var(--mono);color:var(--muted);margin-right:auto}
+.empty{padding:30px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:16px}
+.hint6{font-size:.85rem;color:var(--muted);margin:8px 0 0}
+
+/* mock */
+.mock-wrap{margin-top:46px}
+.sec-h{font:800 1.9rem var(--display);margin:0 0 4px}
+.sec-sub{color:var(--muted);margin:0 0 18px;max-width:70ch}
+.mocks{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.mock{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:var(--shadow)}
+.mock h3{margin:0;font:800 1.25rem var(--display)}
+.clock{font:800 2.6rem/1 var(--mono);letter-spacing:-.04em;margin:12px 0}
+.clock.low{color:#d63c3c}
+.mock .row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.mins{font:700 .68rem var(--mono);color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:1px 6px;flex:none;margin-top:2px}
+.rules{font-size:.88rem;color:var(--muted);margin:10px 0 0;padding-left:18px}
+
+/* resources */
+.res{margin-top:46px}
+.rgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.rcard{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:var(--shadow)}
+.rcard h3{font:700 1.05rem var(--display);margin:0 0 8px}
+.rcard ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.rcard li a{text-decoration:none;font-weight:600;border-bottom:1px solid var(--line)}
+.rcard li a:hover{color:var(--accent);border-color:var(--accent)}
+.rcard li small{display:block;color:var(--muted);font-size:.8rem}
+.road{margin-top:18px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px;counter-reset:ph}
+.ph{background:var(--panel);border:1px solid var(--line);border-top:5px solid var(--c);border-radius:14px;padding:14px;counter-increment:ph}
+.ph::before{content:"Phase " counter(ph);font:700 .68rem var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c)}
+.ph h4{margin:4px 0 6px;font:700 1rem var(--display)}
+.ph p{margin:0;font-size:.88rem;color:var(--muted)}
+footer{max-width:1280px;margin:0 auto;padding:10px 16px 50px;color:var(--muted);font-size:.85rem}
+
+@media (max-width:1000px){
+  .shell{grid-template-columns:1fr}
+  aside.side{position:fixed;left:0;top:0;bottom:0;width:min(86vw,320px);max-height:none;background:var(--bg);z-index:60;padding:20px 16px;transform:translateX(-105%);transition:transform .3s;border-right:1px solid var(--line)}
+  body.menu aside.side{transform:none}
+  body.menu .scrim{display:block;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:55}
+  #menuBtn{display:grid}
+  nav.main{display:none}
+  .rgrid{grid-template-columns:1fr 1fr}.road{grid-template-columns:1fr 1fr}
+}
+@media (max-width:700px){
+  .stats,.rings{grid-template-columns:1fr 1fr}
+  .cols,.mocks,.rgrid,.road{grid-template-columns:1fr}
+  .hero{padding:20px}
+  .filters{top:58px}
+  .sched{flex-wrap:wrap}.sched div{flex:1 1 45%!important}
+  .top-in{gap:8px;padding:8px 10px}
+  .brand span.full{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+@media print{header.top,aside.side,.filters,.tools,.todaybox{display:none}.shell{display:block}details.day{break-inside:avoid}}
+</style>
+</head>
+<body>
+<a class="skip" href="#plan">Skip to the plan</a>
+
+<header class="top">
+  <div class="top-in">
+    <button id="menuBtn" class="iconbtn" aria-label="Open day navigation" aria-expanded="false" aria-controls="sidebar">☰</button>
+    <a class="brand" href="#dashboard" aria-label="DSA Zero to Hero home"><span class="mark">O(1)</span><span class="full">DSA Zero to Hero</span></a>
+    <nav class="main" aria-label="Sections">
+      <a href="#dashboard">Dashboard</a><a href="#plan">30-Day Plan</a><a href="#mock">Mock Tests</a><a href="#resources">Resources</a>
+    </nav>
+    <span class="spacer"></span>
+    <div class="seg" role="group" aria-label="Language for notes">
+      <button data-lang="cpp" aria-pressed="true">C++</button>
+      <button data-lang="java" aria-pressed="false">Java</button>
+      <button data-lang="py" aria-pressed="false">Python</button>
+    </div>
+    <button id="themeBtn" class="iconbtn" aria-label="Toggle dark mode" title="Toggle dark mode">🌙</button>
+  </div>
+</header>
+<div class="scrim" id="scrim"></div>
+
+<div class="shell">
+  <aside class="side" id="sidebar" aria-label="Day navigation"></aside>
+
+  <main id="main">
+    <noscript><p>This site needs JavaScript to run.</p></noscript>
+
+    <section class="hero" id="dashboard" aria-labelledby="h1">
+      <div class="eyebrow">30 days · 6 hours a day · zero to interview-ready</div>
+      <h1 id="h1">DSA <em>Zero to Hero</em>: 30-Day Bootcamp</h1>
+      <p class="lead">One topic a day, in a fixed rhythm: learn, read, practise, revise. Every day links to YouTube lectures and problems from LeetCode, Codeforces, CSES, HackerRank, AtCoder, GeeksforGeeks, CodeChef and InterviewBit. Progress is saved in this browser.</p>
+
+      <div class="barlbl"><span>Overall progress</span><span id="pctTxt">0%</span></div>
+      <div class="bar" role="progressbar" aria-label="Overall progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="bar"><i id="barFill"></i></div>
+
+      <div class="stats" id="stats"></div>
+      <div class="rings" id="rings"></div>
+
+      <div class="todaybox">
+        <div class="msg" id="todayMsg"></div>
+        <label>Start date <input type="date" id="startDate" aria-label="Plan start date"></label>
+        <button class="btn accent" id="jumpToday">Jump to today</button>
+      </div>
+
+      <h4 class="sr">Day structure</h4>
+      <div class="sched" aria-label="Daily six hour structure">
+        <div><b>Hour 1–2</b>Watch the concept lecture</div>
+        <div><b>Hour 3</b>Read and revise notes</div>
+        <div><b>Hour 4–5</b>Solve 4–6 problems</div>
+        <div><b>Hour 6</b>Revise, 1 no-hint problem, summary</div>
+      </div>
+
+      <div class="tools">
+        <button class="btn ghost" id="exportBtn">⬇ Export progress</button>
+        <button class="btn ghost" id="importBtn">⬆ Import progress</button>
+        <input type="file" id="importFile" accept="application/json" hidden>
+        <button class="btn ghost" id="resetBtn">Reset all</button>
+      </div>
+    </section>
+
+    <section id="plan" aria-label="30 day plan">
+      <div class="filters" role="search">
+        <input type="search" id="q" placeholder="Search topics, problems, videos…" aria-label="Search topics, problems and videos">
+        <select id="fDiff" aria-label="Filter by difficulty"><option value="">All difficulties</option><option>Easy</option><option>Medium</option><option>Hard</option></select>
+        <select id="fPlat" aria-label="Filter by platform"><option value="">All platforms</option></select>
+        <button class="btn ghost" id="expandAll">Expand all</button>
+        <button class="btn ghost" id="collapseAll">Collapse all</button>
+        <span class="count" id="count" aria-live="polite"></span>
+      </div>
+      <div id="weeks"></div>
+    </section>
+
+    <section class="mock-wrap" id="mock" aria-labelledby="mockH">
+      <h2 class="sec-h" id="mockH">Mock tests · Day 29 &amp; 30</h2>
+      <p class="sec-sub">Simulate a real interview round. Start the clock, stay inside the time-box for each problem, and no looking at solutions until time is up. Ticks here stay in sync with the day cards.</p>
+      <div class="mocks" id="mocks"></div>
+    </section>
+
+    <section class="res" id="resources" aria-labelledby="resH">
+      <h2 class="sec-h" id="resH">Resources</h2>
+      <p class="sec-sub">Cheat sheets, visualizers, books and what to do after day 30.</p>
+      <div class="rgrid" id="rgrid"></div>
+      <h3 class="sec-h" style="font-size:1.4rem;margin-top:30px">Interview-prep roadmap after Day 30</h3>
+      <div class="road" id="road"></div>
+    </section>
+  </main>
+</div>
+<footer>Built as a single file. Edit the <code>DAYS</code> array at the top of the script to change anything. YouTube links open a search scoped to the channel and topic so they never go stale; swap in exact video URLs if you prefer.</footer>
+
+<script>
+/* =====================================================================
+   DATA: edit here. Each day: { d, wk, topic, q, obj[], vids[], probs[], tip[cpp,java,py] }
+   ===================================================================== */
+const E='Easy',M='Medium',H='Hard';
+const P={LC:'LeetCode',CF:'Codeforces',CS:'CSES',HR:'HackerRank',GFG:'GeeksforGeeks',CC:'CodeChef',AC:'AtCoder',IB:'InterviewBit'};
+const gs=(site,q)=>'https://www.google.com/search?q='+encodeURIComponent('site:'+site+' '+q);
+const L =(slug,t,d)=>({p:P.LC,t,d,u:`https://leetcode.com/problems/${slug}/`});
+const CF=(c,i,t,d)=>({p:P.CF,t:`${c}${i} · ${t}`,d,u:`https://codeforces.com/problemset/problem/${c}/${i}`});
+const CFT=(tag,lo,hi,t,d)=>({p:P.CF,t,d,s:1,u:`https://codeforces.com/problemset?tags=${encodeURIComponent(tag+','+lo+'-'+hi)}&order=BY_SOLVED_DESC`});
+const CS=(id,t,d)=>({p:P.CS,t,d,u:`https://cses.fi/problemset/task/${id}`});
+const HR=(slug,t,d)=>({p:P.HR,t,d,u:`https://www.hackerrank.com/challenges/${slug}/problem`});
+const AC=(c,k,t,d)=>({p:P.AC,t,d,u:`https://atcoder.jp/contests/${c}/tasks/${k}`});
+const GFG=(q,t,d)=>({p:P.GFG,t,d,s:1,u:gs('geeksforgeeks.org/problems',q)});
+const IB=(q,t,d)=>({p:P.IB,t,d,s:1,u:gs('interviewbit.com/problems',q)});
+const CC=(code,t,d)=>({p:P.CC,t,d,u:`https://www.codechef.com/problems/${code}`});
+const CCS=(q,t,d)=>({p:P.CC,t,d,s:1,u:gs('codechef.com/problems',q)});
+const V=(t,c,q)=>({t,c,u:'https://www.youtube.com/results?search_query='+encodeURIComponent(c+' '+q)});
+const TK='take U forward',NC='NeetCode',AB='Abdul Bari',AP='Apna College',FC='freeCodeCamp.org',MC='mycodeschool',WF='WilliamFiset',AV='Aditya Verma';
+
+const DAYS=[
+/* ---------- WEEK 1 ---------- */
+{d:1,wk:1,topic:'Programming Basics & Complexity',q:'time and space complexity big o',
+ obj:['Set up your language, fast I/O, loops and functions','Understand Big-O for time and space (best, average, worst)','Count operations in single, nested and logarithmic loops','Meet the standard library: vectors/lists, strings, pairs, sorting'],
+ vids:[V('C++ full course for beginners','Apna College','C++ course DSA basics'),V('Time and space complexity explained','take U forward','time complexity space complexity'),V('Asymptotic notations Big-O, Omega, Theta','Abdul Bari','asymptotic notations')],
+ probs:[L('fizz-buzz','Fizz Buzz',E),L('reverse-integer','Reverse Integer',M),HR('simple-array-sum','Simple Array Sum',E),CF(4,'A','Watermelon',E),CS(1068,'Weird Algorithm',E),AC('abs','abc086_a','Product',E),CC('FLOW001','Add Two Numbers',E),GFG('count digits in a number','Count digits in a number',E)],
+ tip:['<code>#include &lt;bits/stdc++.h&gt;</code>, <code>ios::sync_with_stdio(false); cin.tie(nullptr);</code> for fast input. Use <code>long long</code> to avoid overflow.','Use <code>BufferedReader</code> + <code>StringTokenizer</code> for fast input. <code>long</code> for large sums.','Python ints never overflow. Use <code>sys.stdin.readline</code> for fast input and avoid heavy loops.']},
+{d:2,wk:1,topic:'Arrays',q:'arrays kadane algorithm',
+ obj:['Traverse, insert, delete, rotate, reverse in place','Kadane\'s algorithm for maximum subarray','Use extra space vs in-place trade-offs','Recognise array patterns: counting, swapping, partitioning'],
+ vids:[V('Arrays: Striver A2Z playlist','take U forward','arrays striver A2Z DSA'),V('Arrays and Kadane (Blind 75)','NeetCode','maximum subarray kadane'),V('Arrays in DSA course','Apna College','DSA arrays lecture')],
+ probs:[L('two-sum','Two Sum',E),L('best-time-to-buy-and-sell-stock','Best Time to Buy and Sell Stock',E),L('maximum-subarray','Maximum Subarray',M),L('product-of-array-except-self','Product of Array Except Self',M),HR('diagonal-difference','Diagonal Difference',E),CS(1083,'Missing Number',E),CS(1094,'Increasing Array',E),CC('FLOW002','Find Remainder',E)],
+ tip:['<code>vector&lt;int&gt;</code>, <code>reverse(v.begin(), v.end())</code>, <code>rotate()</code>, <code>accumulate()</code>.','<code>int[]</code> / <code>ArrayList</code>, <code>Arrays.fill</code>, <code>Arrays.sort</code>, <code>System.arraycopy</code>.','Lists, slicing <code>a[::-1]</code>, <code>enumerate</code>, <code>sum()</code>, <code>max()</code>.']},
+{d:3,wk:1,topic:'Strings',q:'string manipulation problems',
+ obj:['Character arithmetic and ASCII frequency arrays','Palindromes, anagrams and substrings','Expand-around-centre idea','String building without O(n²) concatenation'],
+ vids:[V('Strings playlist','take U forward','strings DSA striver'),V('Valid Anagram, Palindrome and friends','NeetCode','valid anagram valid palindrome'),V('Strings in C++ / DSA','Apna College','strings DSA lecture')],
+ probs:[L('valid-anagram','Valid Anagram',E),L('valid-palindrome','Valid Palindrome',E),L('longest-common-prefix','Longest Common Prefix',E),L('longest-palindromic-substring','Longest Palindromic Substring',M),CF(118,'A','String Task',E),CF(281,'A','Word Capitalization',E),HR('camelcase','CamelCase',E),CS(1069,'Repetitions',E)],
+ tip:['<code>string</code>, <code>s.substr()</code>, <code>isalpha()</code>, <code>stringstream</code>. Strings are mutable.','Strings are immutable: use <code>StringBuilder</code>. <code>toCharArray()</code>, <code>charAt()</code>.','Strings are immutable. Use <code>"".join(list)</code>, <code>ord()</code>, <code>chr()</code>, <code>collections.Counter</code>.']},
+{d:4,wk:1,topic:'Hashing (Maps & Sets)',q:'hashing hash map hash set',
+ obj:['Hash set, hash map and frequency counting','Two-sum pattern and complement lookup','Prefix sum + hash map for subarray counting','Understand collisions and average O(1) lookups'],
+ vids:[V('Hashing explained','take U forward','hashing striver map set'),V('Hash map problems (Blind 75)','NeetCode','top k frequent elements longest consecutive'),V('Hash tables and hashing','Abdul Bari','hashing hash table')],
+ probs:[L('top-k-frequent-elements','Top K Frequent Elements',M),L('longest-consecutive-sequence','Longest Consecutive Sequence',M),L('subarray-sum-equals-k','Subarray Sum Equals K',M),L('group-anagrams','Group Anagrams',M),HR('ctci-ransom-note','Hash Tables: Ransom Note',E),HR('two-strings','Two Strings',E),CS(1621,'Distinct Numbers',E),CS(1640,'Sum of Two Values',M)],
+ tip:['<code>unordered_map</code>, <code>unordered_set</code> (average O(1)); <code>map</code>/<code>set</code> are ordered O(log n).','<code>HashMap</code>, <code>HashSet</code>, <code>getOrDefault</code>, <code>merge</code>, <code>TreeMap</code> for ordered keys.','<code>dict</code>, <code>set</code>, <code>defaultdict</code>, <code>Counter</code>. All average O(1).']},
+{d:5,wk:1,topic:'Two Pointers & Sliding Window',q:'two pointers sliding window',
+ obj:['Opposite-direction and same-direction two pointers','Fixed-size and variable-size sliding windows','Know when the window can shrink (monotonic condition)','Convert O(n²) brute force to O(n)'],
+ vids:[V('Two pointers and sliding window','take U forward','sliding window two pointer striver'),V('Sliding window problems','NeetCode','sliding window longest substring minimum window'),V('Sliding window technique','Apna College','sliding window')],
+ probs:[L('3sum','3Sum',M),L('container-with-most-water','Container With Most Water',M),L('longest-substring-without-repeating-characters','Longest Substring Without Repeating Characters',M),L('permutation-in-string','Permutation in String',M),L('minimum-window-substring','Minimum Window Substring',H),CS(1141,'Playlist',M),CFT('two pointers',1200,1500,'Codeforces: two pointers tag (1200–1500)',M),GFG('longest subarray with sum k','Longest subarray with sum K',M)],
+ tip:['Maintain <code>l</code>, <code>r</code> indexes and a <code>unordered_map</code>/<code>int cnt[128]</code> for window state.','Use <code>int[] cnt = new int[128]</code> for ASCII windows; update on expand and shrink.','Use <code>Counter</code> or a dict for window state; <code>for r in range(n)</code> with <code>while</code> to shrink.']},
+{d:6,wk:1,topic:'Prefix Sum & Sorting',q:'prefix sum sorting algorithms',
+ obj:['Build prefix sums and answer range queries in O(1)','Merge sort, quick sort, counting sort ideas','Custom comparators and sorting by key','Intervals: sort then sweep'],
+ vids:[V('Sorting algorithms','Abdul Bari','merge sort quick sort'),V('Prefix sum and intervals','NeetCode','prefix sum merge intervals'),V('Sorting playlist','take U forward','sorting techniques striver')],
+ probs:[L('find-pivot-index','Find Pivot Index',E),L('range-sum-query-immutable','Range Sum Query: Immutable',E),L('sort-colors','Sort Colors',M),L('merge-intervals','Merge Intervals',M),L('largest-number','Largest Number',M),CS(1084,'Apartments',M),CS(1629,'Movie Festival',M),GFG('count inversions in an array','Count Inversions',M)],
+ tip:['<code>sort(v.begin(), v.end(), [](auto&amp;a, auto&amp;b){ return a[0]&lt;b[0]; });</code> for custom order.','<code>Arrays.sort(arr, (a,b)-&gt;a[0]-b[0])</code> on <code>int[][]</code>; use <code>Integer.compare</code> to avoid overflow.','<code>arr.sort(key=lambda x:x[0])</code>; <code>itertools.accumulate</code> for prefix sums.']},
+{d:7,wk:1,topic:'Binary Search',q:'binary search',
+ obj:['Classic binary search and its off-by-one traps','Lower bound / upper bound','Search in rotated arrays','Binary search on the answer (min-max problems)'],
+ vids:[V('Binary Search playlist','take U forward','binary search striver'),V('Binary search patterns','NeetCode','binary search koko eating bananas rotated array'),V('Binary search explained','Abdul Bari','binary search')],
+ probs:[L('binary-search','Binary Search',E),L('search-in-rotated-sorted-array','Search in Rotated Sorted Array',M),L('find-first-and-last-position-of-element-in-sorted-array','Find First and Last Position of Element in Sorted Array',M),L('find-minimum-in-rotated-sorted-array','Find Minimum in Rotated Sorted Array',M),L('koko-eating-bananas','Koko Eating Bananas',M),L('median-of-two-sorted-arrays','Median of Two Sorted Arrays',H),CS(1085,'Array Division',M),CS(1620,'Factory Machines',M)],
+ tip:['<code>lower_bound</code>, <code>upper_bound</code>, <code>binary_search</code>. Use <code>mid = lo + (hi-lo)/2</code>.','<code>Arrays.binarySearch</code>, <code>Collections.binarySearch</code>. Write your own for bounds.','<code>bisect_left</code>, <code>bisect_right</code> from <code>bisect</code>.']},
+/* ---------- WEEK 2 ---------- */
+{d:8,wk:2,topic:'Recursion',q:'recursion basics',
+ obj:['Base case, recursive case, call stack','Trace recursion trees by hand','Time complexity of recursion (recurrence relations)','Divide and conquer vs repeated work (hint of DP)'],
+ vids:[V('Recursion playlist','take U forward','recursion striver'),V('Recursion for beginners','freeCodeCamp.org','recursion course'),V('Recurrence relations','Abdul Bari','recursion recurrence relation')],
+ probs:[L('fibonacci-number','Fibonacci Number',E),L('climbing-stairs','Climbing Stairs',E),L('powx-n','Pow(x, n)',M),L('generate-parentheses','Generate Parentheses',M),L('merge-two-sorted-lists','Merge Two Sorted Lists',E),L('k-th-symbol-in-grammar','K-th Symbol in Grammar',M),CS(2165,'Tower of Hanoi',M),CS(1623,'Apple Division',M)],
+ tip:['Deep recursion can overflow the stack (~10⁵ depth). Pass vectors by reference.','Default stack handles ~10⁴ frames. Run in a bigger-stack <code>Thread</code> if needed.','Raise limit with <code>sys.setrecursionlimit</code>; prefer iteration for very deep recursion.']},
+{d:9,wk:2,topic:'Backtracking',q:'backtracking subsets permutations',
+ obj:['Choose, explore, un-choose template','Subsets, permutations, combinations','Pruning and handling duplicates','Constraint problems like N-Queens'],
+ vids:[V('Backtracking series','take U forward','recursion backtracking subsets permutations'),V('Backtracking (Blind 75)','NeetCode','backtracking combination sum n queens'),V('Backtracking full course','freeCodeCamp.org','backtracking course')],
+ probs:[L('subsets','Subsets',M),L('permutations','Permutations',M),L('combination-sum','Combination Sum',M),L('word-search','Word Search',M),L('palindrome-partitioning','Palindrome Partitioning',M),L('n-queens','N-Queens',H),CS(1624,'Chessboard and Queens',M),CS(1622,'Creating Strings',M)],
+ tip:['Keep <code>vector&lt;int&gt; cur</code> by reference; <code>push_back</code> then <code>pop_back</code> to undo.','Copy with <code>new ArrayList&lt;&gt;(cur)</code> when saving a result; remove last to undo.','Append <code>cur[:]</code> (a copy) to results; <code>cur.pop()</code> to undo.']},
+{d:10,wk:2,topic:'Linked List',q:'linked list',
+ obj:['Singly and doubly linked lists; pointer manipulation','Reverse, merge, detect cycles (Floyd)','Fast and slow pointers; dummy head trick','Design: LRU cache with hash map + doubly linked list'],
+ vids:[V('Linked list playlist','take U forward','linked list striver'),V('Linked list problems','NeetCode','linked list reverse cycle lru cache'),V('Introduction to linked lists','mycodeschool','linked list data structure')],
+ probs:[L('reverse-linked-list','Reverse Linked List',E),L('linked-list-cycle','Linked List Cycle',E),L('middle-of-the-linked-list','Middle of the Linked List',E),L('remove-nth-node-from-end-of-list','Remove Nth Node From End of List',M),L('add-two-numbers','Add Two Numbers',M),L('reorder-list','Reorder List',M),L('lru-cache','LRU Cache',M),HR('ctci-linked-list-cycle','Linked Lists: Detect a Cycle',E)],
+ tip:['<code>struct Node{int val; Node* next;};</code> Remember to <code>delete</code> or let it leak in contests.','<code>class ListNode{int val; ListNode next;}</code>. Garbage collected, so null out pointers when needed.','<code>class ListNode: def __init__(self,val=0,next=None)</code>. Use a dummy node to simplify edge cases.']},
+{d:11,wk:2,topic:'Stack',q:'stack data structure problems',
+ obj:['LIFO and when a stack fits','Matching brackets and expression evaluation','Design stack with min in O(1)','Convert recursion to an explicit stack'],
+ vids:[V('Stack and queue playlist','take U forward','stack queue striver'),V('Stack problems (Blind 75)','NeetCode','valid parentheses min stack'),V('Stacks: array and linked list','mycodeschool','stack data structure')],
+ probs:[L('valid-parentheses','Valid Parentheses',E),L('min-stack','Min Stack',M),L('evaluate-reverse-polish-notation','Evaluate Reverse Polish Notation',M),L('decode-string','Decode String',M),L('implement-queue-using-stacks','Implement Queue using Stacks',E),L('backspace-string-compare','Backspace String Compare',E),HR('balanced-brackets','Balanced Brackets',M),IB('balanced parantheses','Balanced Parentheses',E)],
+ tip:['<code>stack&lt;int&gt;</code> or use <code>vector</code> as a stack (faster).','Prefer <code>ArrayDeque</code> over legacy <code>Stack</code>.','Use a plain <code>list</code> with <code>append</code>/<code>pop</code>.']},
+{d:12,wk:2,topic:'Queue & Deque',q:'queue deque circular queue',
+ obj:['FIFO queue, circular queue, deque','Implement stack with queues and vice versa','BFS-style level processing','Sliding window maximum with a deque'],
+ vids:[V('Queue implementation','mycodeschool','queue data structure'),V('Queue and deque problems','NeetCode','sliding window maximum deque design circular queue'),V('Stack and queue playlist','take U forward','queue striver')],
+ probs:[L('implement-stack-using-queues','Implement Stack using Queues',E),L('number-of-recent-calls','Number of Recent Calls',E),L('design-circular-queue','Design Circular Queue',M),L('rotting-oranges','Rotting Oranges',M),L('sliding-window-maximum','Sliding Window Maximum',H),L('time-needed-to-buy-tickets','Time Needed to Buy Tickets',E),HR('queue-using-two-stacks','Queues: A Tale of Two Stacks',M),CS(2162,'Josephus Problem I',M)],
+ tip:['<code>queue&lt;int&gt;</code>, <code>deque&lt;int&gt;</code>. Deque supports O(1) at both ends.','<code>ArrayDeque</code> or <code>LinkedList</code> as <code>Queue</code>/<code>Deque</code>.','<code>collections.deque</code>. Never use <code>list.pop(0)</code>, which is O(n).']},
+{d:13,wk:2,topic:'Monotonic Stack',q:'monotonic stack next greater element',
+ obj:['Next greater/smaller element pattern','Maintain an increasing or decreasing stack','Histograms and span problems','Amortised O(n) analysis'],
+ vids:[V('Monotonic stack series','take U forward','monotonic stack next greater element'),V('Monotonic stack problems','NeetCode','daily temperatures largest rectangle histogram'),V('Stack: next greater element','Aditya Verma','stack next greater element')],
+ probs:[L('next-greater-element-i','Next Greater Element I',E),L('daily-temperatures','Daily Temperatures',M),L('next-greater-element-ii','Next Greater Element II',M),L('online-stock-span','Online Stock Span',M),L('remove-k-digits','Remove K Digits',M),L('sum-of-subarray-minimums','Sum of Subarray Minimums',M),L('largest-rectangle-in-histogram','Largest Rectangle in Histogram',H),CS(1142,'Advertisement',H)],
+ tip:['Store indices on the stack, not values. Iterate right-to-left for "next" problems.','Use <code>Deque&lt;Integer&gt;</code> of indices; pop while condition holds.','Keep a list of indices; <code>while stack and a[stack[-1]] &lt; x: stack.pop()</code>.']},
+{d:14,wk:2,topic:'Heap / Priority Queue',q:'heap priority queue',
+ obj:['Binary heap, heapify, push/pop in O(log n)','Top-K and K-way merge patterns','Two-heap trick for medians','Scheduling with greedy + heap'],
+ vids:[V('Heap and priority queue','take U forward','heap priority queue striver'),V('Heap problems (Blind 75)','NeetCode','heap priority queue kth largest median'),V('Heap sort and heapify','Abdul Bari','heap sort heapify')],
+ probs:[L('kth-largest-element-in-a-stream','Kth Largest Element in a Stream',E),L('last-stone-weight','Last Stone Weight',E),L('k-closest-points-to-origin','K Closest Points to Origin',M),L('task-scheduler','Task Scheduler',M),L('find-median-from-data-stream','Find Median from Data Stream',H),L('merge-k-sorted-lists','Merge k Sorted Lists',H),HR('jesse-and-cookies','Jesse and Cookies',E),HR('find-the-running-median','Find the Running Median',H)],
+ tip:['<code>priority_queue&lt;int&gt;</code> is a max-heap. Min-heap: <code>priority_queue&lt;int,vector&lt;int&gt;,greater&lt;int&gt;&gt;</code>.','<code>PriorityQueue&lt;Integer&gt;</code> is a min-heap; pass <code>Collections.reverseOrder()</code> for max-heap.','<code>heapq</code> is a min-heap; push negatives for max-heap.']},
+/* ---------- WEEK 3 ---------- */
+{d:15,wk:3,topic:'Binary Trees: Traversals',q:'binary tree traversal',
+ obj:['Inorder, preorder, postorder (recursive and iterative)','Level-order traversal with a queue','Height and depth via recursion','Views of a tree (left, right, top)'],
+ vids:[V('Binary tree playlist','take U forward','binary tree striver traversals'),V('Trees (Blind 75)','NeetCode','binary tree invert level order'),V('Tree traversals','mycodeschool','binary tree traversal')],
+ probs:[L('binary-tree-inorder-traversal','Binary Tree Inorder Traversal',E),L('binary-tree-preorder-traversal','Binary Tree Preorder Traversal',E),L('binary-tree-postorder-traversal','Binary Tree Postorder Traversal',E),L('binary-tree-level-order-traversal','Binary Tree Level Order Traversal',M),L('maximum-depth-of-binary-tree','Maximum Depth of Binary Tree',E),L('invert-binary-tree','Invert Binary Tree',E),L('binary-tree-right-side-view','Binary Tree Right Side View',M),HR('tree-level-order-traversal','Tree: Level Order Traversal',E)],
+ tip:['<code>struct TreeNode{int val; TreeNode *left,*right;};</code> Use <code>queue&lt;TreeNode*&gt;</code> for BFS.','<code>Queue&lt;TreeNode&gt; q = new LinkedList&lt;&gt;();</code>; process level by <code>q.size()</code>.','<code>deque</code> for BFS; recursion with helper functions for DFS.']},
+{d:16,wk:3,topic:'Binary Trees: Core Problems',q:'binary tree problems lca diameter',
+ obj:['Return values from DFS (height, diameter, max path)','Lowest common ancestor','Build trees from traversals','Serialise and deserialise'],
+ vids:[V('Binary tree problems','take U forward','binary tree diameter lca striver'),V('Tree problems','NeetCode','binary tree maximum path sum lowest common ancestor'),V('Tree DFS patterns','freeCodeCamp.org','binary tree algorithms')],
+ probs:[L('diameter-of-binary-tree','Diameter of Binary Tree',E),L('balanced-binary-tree','Balanced Binary Tree',E),L('lowest-common-ancestor-of-a-binary-tree','Lowest Common Ancestor of a Binary Tree',M),L('construct-binary-tree-from-preorder-and-inorder-traversal','Construct Binary Tree from Preorder and Inorder Traversal',M),L('binary-tree-maximum-path-sum','Binary Tree Maximum Path Sum',H),L('serialize-and-deserialize-binary-tree','Serialize and Deserialize Binary Tree',H),CS(1131,'Tree Diameter',M),CS(1674,'Subordinates',M)],
+ tip:['Use a global/ref variable for "best so far", return the single-path value from DFS.','Use a field or a one-element array to carry the best answer through recursion.','Use <code>nonlocal</code> or a list cell for the best answer inside nested functions.']},
+{d:17,wk:3,topic:'Binary Search Tree',q:'binary search tree',
+ obj:['BST property, search, insert, delete','Inorder traversal gives sorted order','Validate BST with ranges','Balanced trees idea (AVL / Red-Black)'],
+ vids:[V('BST playlist','take U forward','binary search tree striver'),V('BST problems','NeetCode','binary search tree validate kth smallest'),V('BST insertion and deletion','mycodeschool','binary search tree')],
+ probs:[L('validate-binary-search-tree','Validate Binary Search Tree',M),L('kth-smallest-element-in-a-bst','Kth Smallest Element in a BST',M),L('lowest-common-ancestor-of-a-binary-search-tree','Lowest Common Ancestor of a BST',M),L('delete-node-in-a-bst','Delete Node in a BST',M),L('convert-sorted-array-to-binary-search-tree','Convert Sorted Array to BST',E),L('binary-search-tree-iterator','Binary Search Tree Iterator',M),HR('binary-search-tree-insertion','Binary Search Tree: Insertion',E),HR('ctci-is-binary-search-tree',"Trees: Is This a Binary Search Tree?",M)],
+ tip:['<code>set</code>/<code>map</code> are red-black trees; use them when you need ordered data.','<code>TreeMap</code> / <code>TreeSet</code> give <code>floorKey</code>, <code>ceilingKey</code>.','No built-in tree; use <code>sortedcontainers</code> locally, or write your own BST.']},
+{d:18,wk:3,topic:'Tries',q:'trie prefix tree',
+ obj:['Trie node design (array or map children)','Insert, search, startsWith in O(L)','Autocomplete and word-dictionary problems','Binary trie for XOR problems'],
+ vids:[V('Trie playlist','take U forward','trie striver'),V('Trie problems','NeetCode','implement trie prefix tree word search II'),V('Trie data structure','WilliamFiset','trie data structure')],
+ probs:[L('implement-trie-prefix-tree','Implement Trie (Prefix Tree)',M),L('design-add-and-search-words-data-structure','Design Add and Search Words',M),L('word-search-ii','Word Search II',H),L('replace-words','Replace Words',M),L('search-suggestions-system','Search Suggestions System',M),L('maximum-xor-of-two-numbers-in-an-array','Maximum XOR of Two Numbers in an Array',M),CS(1731,'Word Combinations',M),HR('contacts','Contacts',M)],
+ tip:['<code>struct Trie{Trie* ch[26]; bool end=false;};</code>','<code>class TrieNode{TrieNode[] ch=new TrieNode[26]; boolean end;}</code>','Use nested dicts: <code>node = node.setdefault(c, {})</code>.']},
+{d:19,wk:3,topic:'Graphs: BFS & DFS',q:'graph bfs dfs',
+ obj:['Adjacency list vs matrix','BFS for shortest path in unweighted graphs','DFS, connected components, grid flood fill','Cycle detection and visited tracking'],
+ vids:[V('Graph series','take U forward','graph series striver BFS DFS'),V('Graph problems','NeetCode','graph number of islands clone graph'),V('Graph algorithms course','freeCodeCamp.org','graph theory algorithms')],
+ probs:[L('number-of-islands','Number of Islands',M),L('clone-graph','Clone Graph',M),L('pacific-atlantic-water-flow','Pacific Atlantic Water Flow',M),L('word-ladder','Word Ladder',H),L('rotting-oranges','Rotting Oranges',M),CS(1192,'Counting Rooms',M),CS(1193,'Labyrinth',M),HR('ctci-bfs-shortest-reach','BFS: Shortest Reach in a Graph',M)],
+ tip:['<code>vector&lt;vector&lt;int&gt;&gt; g(n);</code> Use <code>int dx[]={1,-1,0,0}, dy[]={0,0,1,-1};</code> for grids.','<code>List&lt;List&lt;Integer&gt;&gt; g</code>; use an iterative DFS if recursion gets deep.','<code>defaultdict(list)</code> for adjacency; <code>deque</code> for BFS.']},
+{d:20,wk:3,topic:'Topological Sort & Union-Find',q:'topological sort union find disjoint set',
+ obj:['Kahn\'s algorithm and DFS topological sort','Cycle detection in directed graphs','Disjoint set union with path compression and union by size','Connected components and redundant edges'],
+ vids:[V('Topological sort','take U forward','topological sort kahn striver'),V('Union-Find','NeetCode','union find redundant connection accounts merge'),V('Union-Find data structure','WilliamFiset','union find disjoint set')],
+ probs:[L('course-schedule','Course Schedule',M),L('course-schedule-ii','Course Schedule II',M),L('redundant-connection','Redundant Connection',M),L('accounts-merge','Accounts Merge',M),L('number-of-provinces','Number of Provinces',M),L('find-eventual-safe-states','Find Eventual Safe States',M),CS(1679,'Course Schedule',M),CS(1666,'Building Roads',M)],
+ tip:['Implement DSU with <code>parent[]</code> and <code>sz[]</code>; <code>find</code> with path compression.','Same DSU in a small class; use iterative <code>find</code> to avoid deep recursion.','DSU with a list <code>parent</code>; iterative <code>find</code> with path halving.']},
+{d:21,wk:3,topic:'Shortest Paths & MST',q:'dijkstra shortest path minimum spanning tree',
+ obj:['Dijkstra with a priority queue','Bellman-Ford and limited-stop variants','Floyd-Warshall for small graphs','Kruskal and Prim for MST'],
+ vids:[V('Dijkstra algorithm','take U forward','dijkstra algorithm striver'),V('Dijkstra / Prim / Kruskal','NeetCode','network delay time min cost connect all points'),V('Dijkstra and shortest paths','WilliamFiset','dijkstra shortest path')],
+ probs:[L('network-delay-time','Network Delay Time',M),L('cheapest-flights-within-k-stops','Cheapest Flights Within K Stops',M),L('path-with-minimum-effort','Path With Minimum Effort',M),L('min-cost-to-connect-all-points','Min Cost to Connect All Points',M),CS(1671,'Shortest Routes I',M),CS(1672,'Shortest Routes II',M),CS(1675,'Road Reparation',M),CS(1195,'Flight Discount',H)],
+ tip:['<code>priority_queue&lt;pair&lt;ll,int&gt;, vector&lt;...&gt;, greater&lt;...&gt;&gt;</code>; skip stale entries.','<code>PriorityQueue&lt;long[]&gt;</code> ordered by distance; use <code>long</code> for distances.','<code>heapq.heappush(pq,(d,u))</code>; skip if <code>d &gt; dist[u]</code>.']},
+/* ---------- WEEK 4 ---------- */
+{d:22,wk:4,topic:'Dynamic Programming: 1D',q:'dynamic programming 1d',
+ obj:['Recognise overlapping subproblems and optimal substructure','Memoisation (top-down) vs tabulation (bottom-up)','Define state, transition, base case','Space optimisation to O(1)'],
+ vids:[V('DP playlist','take U forward','dynamic programming striver'),V('1-D DP (Blind 75)','NeetCode','1-D dynamic programming house robber coin change'),V('Dynamic programming playlist','Aditya Verma','dynamic programming')],
+ probs:[L('climbing-stairs','Climbing Stairs',E),L('house-robber','House Robber',M),L('coin-change','Coin Change',M),L('decode-ways','Decode Ways',M),L('word-break','Word Break',M),CS(1633,'Dice Combinations',E),CS(1634,'Minimum Coins',E),AC('dp','dp_a','Frog 1',E)],
+ tip:['Initialise with <code>vector&lt;int&gt; dp(n+1, INF)</code>; use <code>1e9</code> for INF with ints.','<code>Arrays.fill(dp, Integer.MAX_VALUE/2)</code> to avoid overflow in additions.','Use <code>@lru_cache(None)</code> for quick memoisation; mind recursion depth.']},
+{d:23,wk:4,topic:'Dynamic Programming: 2D & Grids',q:'dynamic programming 2d grid',
+ obj:['Grid path counting and minimum path sum','Two-sequence states (i, j)','Edit distance','Roll the table to save memory'],
+ vids:[V('2-D DP (Blind 75)','NeetCode','2-D dynamic programming unique paths edit distance'),V('DP on grids','take U forward','dp on grids striver'),V('DP problems','Aditya Verma','dynamic programming grid')],
+ probs:[L('unique-paths','Unique Paths',M),L('minimum-path-sum','Minimum Path Sum',M),L('triangle','Triangle',M),L('maximal-square','Maximal Square',M),L('edit-distance','Edit Distance',H),CS(1638,'Grid Paths',M),CS(1639,'Edit Distance',M),AC('dp','dp_h','Grid 1',M)],
+ tip:['<code>vector&lt;vector&lt;int&gt;&gt; dp(n, vector&lt;int&gt;(m, 0));</code>','<code>int[][] dp = new int[n][m];</code> Beware of fill-order dependencies.','<code>dp = [[0]*m for _ in range(n)]</code>, never <code>[[0]*m]*n</code>.']},
+{d:24,wk:4,topic:'DP: Knapsack Patterns',q:'knapsack dynamic programming',
+ obj:['0/1 knapsack and subset sum','Unbounded knapsack (coin change II)','Counting vs feasibility vs optimisation','1-D rolling array and iteration order'],
+ vids:[V('Knapsack DP','Aditya Verma','knapsack dynamic programming'),V('Knapsack problems','take U forward','knapsack dp striver'),V('Knapsack and subset sum','NeetCode','partition equal subset sum coin change ii')],
+ probs:[L('partition-equal-subset-sum','Partition Equal Subset Sum',M),L('target-sum','Target Sum',M),L('coin-change-ii','Coin Change II',M),L('ones-and-zeroes','Ones and Zeroes',M),L('last-stone-weight-ii','Last Stone Weight II',M),CS(1158,'Book Shop',M),AC('dp','dp_d','Knapsack 1',M),HR('ctci-coin-change','DP: Coin Change',M)],
+ tip:['For 0/1 knapsack iterate capacity <b>downwards</b>; for unbounded iterate <b>upwards</b>.','Use <code>long</code> for large counts and apply mod (<code>1_000_000_007</code>) where needed.','Use <code>bitset</code>-like tricks with Python ints for subset sum: <code>mask |= mask &lt;&lt; x</code>.']},
+{d:25,wk:4,topic:'DP: LIS, LCS & Strings',q:'longest increasing subsequence longest common subsequence',
+ obj:['LIS in O(n²) and O(n log n)','LCS and its variations (edit distance, supersequence)','Palindromic subsequences','Reconstruct the answer, not only the length'],
+ vids:[V('LIS and LCS','take U forward','longest increasing subsequence longest common subsequence striver'),V('DP on strings','NeetCode','longest common subsequence distinct subsequences'),V('LCS and subsequence DP','Aditya Verma','longest common subsequence')],
+ probs:[L('longest-increasing-subsequence','Longest Increasing Subsequence',M),L('longest-common-subsequence','Longest Common Subsequence',M),L('longest-palindromic-subsequence','Longest Palindromic Subsequence',M),L('distinct-subsequences','Distinct Subsequences',H),L('russian-doll-envelopes','Russian Doll Envelopes',H),CS(1145,'Increasing Subsequence',M),AC('dp','dp_f','LCS',M),HR('common-child','Common Child',M)],
+ tip:['LIS in O(n log n): keep a <code>tails</code> vector and <code>lower_bound</code>.','Use <code>Arrays.binarySearch</code> or your own lower-bound on the tails array.','Use <code>bisect_left(tails, x)</code> for the O(n log n) LIS.']},
+{d:26,wk:4,topic:'Greedy Algorithms',q:'greedy algorithm',
+ obj:['Greedy-choice property and exchange arguments','Interval scheduling and sorting by end time','Jump-game style reachability','Know when greedy fails and DP is needed'],
+ vids:[V('Greedy playlist','take U forward','greedy algorithms striver'),V('Greedy problems','NeetCode','greedy jump game gas station'),V('Greedy method','Abdul Bari','greedy method job sequencing')],
+ probs:[L('jump-game','Jump Game',M),L('jump-game-ii','Jump Game II',M),L('gas-station','Gas Station',M),L('non-overlapping-intervals','Non-overlapping Intervals',M),L('partition-labels','Partition Labels',M),CS(1630,'Tasks and Deadlines',M),CS(1091,'Concert Tickets',M),HR('luck-balance','Luck Balance',E)],
+ tip:['Sort first, then sweep. Prove it with an exchange argument before coding.','Use <code>Arrays.sort</code> with comparators; <code>PriorityQueue</code> for "best available" greedy.','<code>sorted(..., key=...)</code>, <code>heapq</code>; test a counterexample before trusting greedy.']},
+{d:27,wk:4,topic:'Bit Manipulation',q:'bit manipulation',
+ obj:['AND, OR, XOR, shifts, two\'s complement','Check, set, clear, toggle a bit','XOR tricks: single number, swap, missing number','Bitmasks to represent subsets'],
+ vids:[V('Bit manipulation playlist','take U forward','bit manipulation striver'),V('Bit manipulation (Blind 75)','NeetCode','bit manipulation single number counting bits'),V('Bitwise operations','freeCodeCamp.org','bit manipulation')],
+ probs:[L('single-number','Single Number',E),L('number-of-1-bits','Number of 1 Bits',E),L('counting-bits','Counting Bits',E),L('sum-of-two-integers','Sum of Two Integers',M),L('bitwise-and-of-numbers-range','Bitwise AND of Numbers Range',M),CS(1617,'Bit Strings',E),HR('lonely-integer','Lonely Integer',E),HR('flipping-bits','Flipping Bits',E)],
+ tip:['<code>__builtin_popcount(x)</code>, <code>__builtin_ctz(x)</code>, <code>x &amp; -x</code> for the lowest set bit.','<code>Integer.bitCount</code>, <code>Long.numberOfTrailingZeros</code>, <code>&gt;&gt;&gt;</code> for unsigned shift.','<code>bin(x).count("1")</code>, <code>x.bit_length()</code>. Mask with <code>&amp; 0xFFFFFFFF</code> for 32-bit tricks.']},
+{d:28,wk:4,topic:'Revision & Weak-Spot Day',q:'dsa revision cheat sheet',
+ obj:['Re-solve 5 problems from memory without hints','Write a one-page cheat sheet of patterns and templates','List your 3 weakest topics and do 2 problems from each','Review your notes from every day'],
+ vids:[V('How to revise DSA before interviews','take U forward','dsa revision interview preparation'),V('Coding interview patterns','NeetCode','coding interview patterns roadmap'),V('DSA revision for placements','Apna College','DSA revision placements')],
+ probs:[L('product-of-array-except-self','Product of Array Except Self',M),L('top-k-frequent-elements','Top K Frequent Elements',M),L('validate-binary-search-tree','Validate Binary Search Tree',M),L('number-of-islands','Number of Islands',M),L('lru-cache','LRU Cache',M),CFT('dp',1200,1600,'Codeforces: DP tag (1200–1600)',M),CFT('greedy',1000,1400,'Codeforces: greedy tag (1000–1400)',M),IB('arrays','InterviewBit: Arrays topic practice',M)],
+ tip:['Make a template file: fast I/O, DSU, Dijkstra, binary search, segment of common STL.','Keep a snippet file of your own helper classes (DSU, Trie, Pair comparators).','Keep a notebook of Python idioms: <code>Counter</code>, <code>heapq</code>, <code>bisect</code>, <code>lru_cache</code>.']},
+/* ---------- MOCKS (Days 29-30) ---------- */
+{d:29,wk:4,mock:1,topic:'Mock Test 1 (3 hours, 5 problems)',q:'coding interview mock',
+ obj:['Solve under a real clock, no hints or solutions','Time-box each problem (see minutes tag)','Write the approach in comments before coding','After time ends, review every solution you missed'],
+ vids:[V('Mock coding interview walkthrough','NeetCode','mock coding interview'),V('How to approach interview problems','take U forward','how to solve interview problems approach')],
+ probs:[{...L('3sum','3Sum',M),mins:25},{...L('merge-intervals','Merge Intervals',M),mins:25},{...L('number-of-islands','Number of Islands',M),mins:30},{...L('word-break','Word Break',M),mins:35},{...L('trapping-rain-water','Trapping Rain Water',H),mins:40}],
+ tip:['Timer on, editor only, no autocompletion, no Google.','Use a plain text editor or a whiteboard to practise interview conditions.','Write and run only your own tests; do not paste into a notebook helper.']},
+{d:30,wk:4,mock:2,topic:'Mock Test 2 (3 hours, 5 problems)',q:'coding interview mock',
+ obj:['Second full simulation covering trees, graphs, DP and strings','Explain your solution out loud while coding','Analyse time and space complexity for each answer','Plan your next 4 weeks (see roadmap below)'],
+ vids:[V('Mock interview: what interviewers look for','NeetCode','coding interview what interviewers look for'),V('Placement and interview prep strategy','Apna College','placement preparation strategy DSA')],
+ probs:[{...L('group-anagrams','Group Anagrams',M),mins:20},{...L('kth-smallest-element-in-a-bst','Kth Smallest Element in a BST',M),mins:25},{...L('course-schedule','Course Schedule',M),mins:30},{...L('longest-increasing-subsequence','Longest Increasing Subsequence',M),mins:35},{...L('longest-valid-parentheses','Longest Valid Parentheses',H),mins:45}],
+ tip:['Treat it like the real thing: talk through trade-offs, edge cases, then code.','Practise explaining out loud; record yourself or use a friend.','Final run-through: name the pattern before you write a line of code.']}
+];
+const WEEKS=[{n:1,name:'Week 1 · Foundations',sub:'Complexity, arrays, strings, hashing, windows, sorting, binary search',c:'var(--w1)'},
+ {n:2,name:'Week 2 · Linear structures & recursion',sub:'Recursion, backtracking, linked list, stack, queue, heap',c:'var(--w2)'},
+ {n:3,name:'Week 3 · Trees & graphs',sub:'Trees, BST, tries, BFS/DFS, topo sort, DSU, shortest paths',c:'var(--w3)'},
+ {n:4,name:'Week 4 · DP, greedy, bits & mocks',sub:'Dynamic programming, greedy, bit tricks, revision, two mock tests',c:'var(--w4)'}];
+const DOCS={cpp:['C++ reference','https://en.cppreference.com/w/cpp/container'],java:['Java API docs','https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/util/package-summary.html'],py:['Python docs','https://docs.python.org/3/library/']};
+const RES=[
+ {h:'Cheat sheets',l:[['Big-O Cheat Sheet','https://www.bigocheatsheet.com/','Complexities of common structures and sorts'],['NeetCode Roadmap','https://neetcode.io/roadmap','Topic dependency graph with problems'],['Striver\'s A2Z DSA Sheet','https://takeuforward.org/strivers-a2z-dsa-course/strivers-a2z-dsa-course-sheet-2/','Structured step-by-step sheet'],['cppreference','https://en.cppreference.com/','C++ STL reference']]},
+ {h:'Visualizers',l:[['VisuAlgo','https://visualgo.net/','Animated algorithms and data structures'],['CP-Algorithms','https://cp-algorithms.com/','Deep, rigorous algorithm articles'],['USFCA Visualizations','https://www.cs.usfca.edu/~galles/visualization/Algorithms.html','Trees, heaps, hashing, graphs'],['Algorithm Visualizer','https://algorithm-visualizer.org/','Code + animation side by side'],['Python Tutor','https://pythontutor.com/','Step through code and memory']]},
+ {h:'Books',l:[['Competitive Programmer\'s Handbook','https://cses.fi/book/book.pdf','Free PDF by Antti Laaksonen'],['Cracking the Coding Interview','https://www.crackingthecodinginterview.com/','Gayle Laakmann McDowell'],['Introduction to Algorithms (CLRS)','https://mitpress.mit.edu/9780262046305/introduction-to-algorithms/','The reference text'],['Grokking Algorithms','https://www.manning.com/books/grokking-algorithms-second-edition','Gentle, illustrated intro']]},
+ {h:'Practice platforms',l:[['LeetCode','https://leetcode.com/problemset/','Interview-focused problems'],['CSES Problem Set','https://cses.fi/problemset/','Classic algorithm set, no ads'],['Codeforces','https://codeforces.com/problemset','Contest problems with tags and ratings'],['AtCoder Beginner Selection','https://atcoder.jp/contests/abs','Short, clean beginner problems']]},
+ {h:'More practice',l:[['HackerRank: Data Structures','https://www.hackerrank.com/domains/data-structures','Guided tracks'],['GeeksforGeeks Practice','https://www.geeksforgeeks.org/explore','Topic-wise problems'],['CodeChef Practice','https://www.codechef.com/practice','Beginner to advanced'],['InterviewBit','https://www.interviewbit.com/courses/programming/','Structured interview course']]},
+ {h:'Contests & community',l:[['LeetCode Contests','https://leetcode.com/contest/','Weekly and biweekly rounds'],['Codeforces Contests','https://codeforces.com/contests','Div. 3 / Div. 4 are great after day 30'],['CodeChef Starters','https://www.codechef.com/contests','Regular rated contests'],['AtCoder Contests','https://atcoder.jp/contests/','Weekly ABCs']]}
+];
+const ROAD=[
+ {c:'var(--w1)',h:'Weeks 5–6: Consolidate',p:'Solve a curated 150-problem list (e.g. NeetCode 150). Re-do any topic where you needed hints. 2–3 problems daily plus weekend contests.'},
+ {c:'var(--w2)',h:'Weeks 7–8: Go deeper',p:'Segment trees, Fenwick tree, advanced graphs (MST, SCC, bridges), advanced DP (bitmask, digit, tree DP), string algorithms (KMP, Z).'},
+ {c:'var(--w3)',h:'Weeks 9–10: Interview polish',p:'Weekly mock interviews with a friend or platform, explain solutions aloud, practise clean code, edge cases and testing.'},
+ {c:'var(--w4)',h:'Alongside: Everything else',p:'CS fundamentals (OS, DBMS, networks), low-level design and system design basics, resume and behavioural stories, company-tagged problems.'}
+];
+
+/* =====================================================================
+   APP
+   ===================================================================== */
+const KEY='dsa30.v1';
+const $=(s,r=document)=>r.querySelector(s);
+const $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad=n=>String(n).padStart(2,'0');
+const iso=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parseISO=s=>{const [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d,12)};
+
+let S=load();
+function load(){
+  let o={};try{o=JSON.parse(localStorage.getItem(KEY)||'{}')}catch(e){}
+  return Object.assign({start:iso(new Date()),lang:'cpp',theme:null,checks:{},notes:{},done:{},act:{},mock:{}},o);
+}
+let saveT;function save(){clearTimeout(saveT);saveT=setTimeout(()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}},120)}
+const filt={q:'',diff:'',plat:''};
+const openDays=new Set();
+
+/* ----- progress helpers ----- */
+const items=d=>d.vids.length+d.probs.length;
+const checked=d=>d.vids.filter((_,i)=>S.checks[`v${d.d}-${i}`]).length+d.probs.filter((_,i)=>S.checks[`p${d.d}-${i}`]).length;
+const weekDays=w=>DAYS.filter(d=>d.wk===w);
+function totals(){
+  let all=0,ok=0,pr=0,pOk=0,vOk=0;
+  DAYS.forEach(d=>{all+=items(d);const c=checked(d);ok+=c;pr+=d.probs.length;
+    pOk+=d.probs.filter((_,i)=>S.checks[`p${d.d}-${i}`]).length;vOk+=d.vids.filter((_,i)=>S.checks[`v${d.d}-${i}`]).length});
+  return{all,ok,pr,pOk,vOk,days:Object.keys(S.done).filter(k=>S.done[k]).length};
+}
+function streak(){
+  const dt=new Date();dt.setHours(12,0,0,0);
+  if(!S.act[iso(dt)])dt.setDate(dt.getDate()-1);
+  let n=0;while(S.act[iso(dt)]){n++;dt.setDate(dt.getDate()-1)}return n;
+}
+function todayNum(){
+  const t=new Date();t.setHours(12,0,0,0);
+  return Math.round((t-parseISO(S.start))/864e5)+1;
+}
+function dayDate(n){const d=parseISO(S.start);d.setDate(d.getDate()+n-1);return d}
+const fmt=d=>d.toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'});
+function logAct(){S.act[iso(new Date())]=1}
+
+/* ----- theme + lang ----- */
+function applyTheme(){
+  const t=S.theme||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+  document.documentElement.dataset.theme=t;$('#themeBtn').textContent=t==='dark'?'☀️':'🌙';
+}
+function applyLang(){$$('[data-lang]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.lang===S.lang));$$('.langtip').forEach(el=>{const d=DAYS.find(x=>x.d==el.dataset.d);el.innerHTML=tipHTML(d)})}
+function tipHTML(d){const i=S.lang==='cpp'?0:S.lang==='java'?1:2;const [n,u]=DOCS[S.lang];
+  return `${d.tip[i]} <a href="${esc(u)}" target="_blank" rel="noopener">${esc(n)} ↗</a>`}
+
+/* ----- dashboard ----- */
+function renderDash(){
+  const t=totals(),pct=t.all?Math.round(t.ok/t.all*100):0;
+  $('#pctTxt').textContent=pct+'% · '+t.ok+' / '+t.all+' items';
+  $('#barFill').style.width=pct+'%';$('#bar').setAttribute('aria-valuenow',pct);
+  $('#stats').innerHTML=[[t.days+' / 30','Days complete'],[t.pOk+' / '+t.pr,'Problems solved'],[t.vOk,'Videos watched'],[streak()+' 🔥','Day streak']]
+    .map(([b,s])=>`<div class="stat"><b>${b}</b><span>${s}</span></div>`).join('');
+  const C=2*Math.PI*24;
+  $('#rings').innerHTML=WEEKS.map(w=>{
+    const ds=weekDays(w.n);let a=0,b=0;ds.forEach(d=>{a+=items(d);b+=checked(d)});const p=a?b/a:0;
+    return `<div class="ring" style="--c:${w.c}"><svg viewBox="0 0 56 56" aria-hidden="true"><circle class="bg" cx="28" cy="28" r="24"/><circle class="fg" cx="28" cy="28" r="24" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-p)}"/></svg><div><b>Week ${w.n}</b><small>${Math.round(p*100)}% · ${ds.filter(d=>S.done[d.d]).length}/${ds.length} days</small></div></div>`}).join('');
+  const n=todayNum(),msg=$('#todayMsg');
+  if(n<1)msg.innerHTML=`<b>Your plan starts ${fmt(parseISO(S.start))}</b> (in ${1-n} day${1-n>1?'s':''}). Get your setup ready.`;
+  else if(n>30)msg.innerHTML=`<b>The 30 days are over.</b> Keep going with the roadmap below, or change the start date to run it again.`;
+  else{const d=DAYS[n-1];msg.innerHTML=`<b>Today is Day ${n}: ${esc(d.topic)}</b><br><span style="color:var(--muted);font-size:.9rem">${S.done[n]?'✔ Marked complete. Revise or get ahead.':'6 hours: lecture → notes → problems → revise.'}</span>`}
+}
+function renderSide(){
+  const n=todayNum();
+  $('#sidebar').innerHTML=`<h2>Navigate</h2>`+WEEKS.map(w=>`<div class="sw" style="--c:${w.c}"><div class="sw-h"><span>${esc(w.name.split(' · ')[0])}</span><small>${weekDays(w.n).filter(d=>S.done[d.d]).length}/${weekDays(w.n).length}</small></div><ul>`+
+   weekDays(w.n).map(d=>`<li><a href="#day-${d.d}" data-go="${d.d}" class="${n===d.d?'today':''}"><span class="n">D${d.d}</span><span class="t">${esc(d.topic)}</span><span class="ck">${S.done[d.d]?'✔':''}</span></a></li>`).join('')+`</ul></div>`).join('');
+}
+
+/* ----- plan ----- */
+function dayMatches(d){
+  const q=filt.q.toLowerCase();
+  const text=(d.topic+' '+d.obj.join(' ')+' '+d.vids.map(v=>v.t+' '+v.c).join(' ')+' '+d.probs.map(p=>p.t+' '+p.p).join(' ')).toLowerCase();
+  if(q&&!text.includes(q))return false;
+  if(filt.diff&&!d.probs.some(p=>p.d===filt.diff))return false;
+  if(filt.plat&&!d.probs.some(p=>p.p===filt.plat))return false;
+  return true;
+}
+function probVisible(d,p){
+  if(filt.diff&&p.d!==filt.diff)return false;
+  if(filt.plat&&p.p!==filt.plat)return false;
+  const q=filt.q.toLowerCase();
+  if(q&&!d.topic.toLowerCase().includes(q)&&!d.obj.join(' ').toLowerCase().includes(q)&&!(p.t+' '+p.p).toLowerCase().includes(q))return false;
+  return true;
+}
+function dayHTML(d,w){
+  const n=todayNum(),isT=n===d.d,dt=dayDate(d.d);
+  const open=openDays.has(d.d)||isT&&!openDays.has(-d.d);
+  const probs=d.probs.map((p,i)=>({p,i})).filter(({p})=>probVisible(d,p));
+  const vids=d.vids.map((v,i)=>`<li class="${S.checks[`v${d.d}-${i}`]?'on':''}"><input type="checkbox" id="v${d.d}-${i}" data-k="v${d.d}-${i}" ${S.checks[`v${d.d}-${i}`]?'checked':''} aria-label="Watched: ${esc(v.t)}"><span class="nm"><a href="${esc(v.u)}" target="_blank" rel="noopener">▶ ${esc(v.t)}</a><span class="sub">${esc(v.c)} · opens YouTube results for this channel and topic</span></span></li>`).join('');
+  const pr=probs.map(({p,i})=>`<li class="${S.checks[`p${d.d}-${i}`]?'on':''}"><input type="checkbox" id="p${d.d}-${i}" data-k="p${d.d}-${i}" ${S.checks[`p${d.d}-${i}`]?'checked':''} aria-label="Solved: ${esc(p.t)}"><span class="pill" data-p="${esc(p.p)}">${esc(p.p)}</span><span class="nm"><a href="${esc(p.u)}" target="_blank" rel="noopener">${esc(p.t)}</a>${p.s?'<span class="srch" title="Opens a curated search or tag list">search</span>':''}${p.mins?`<span class="sub">time-box ${p.mins} min</span>`:''}</span><span class="df ${p.d}">${p.d}</span></li>`).join('')||'<li class="sub" style="padding:8px">No problems match the current filters.</li>';
+  const r=encodeURIComponent(d.q);
+  return `<details class="day ${S.done[d.d]?'done':''} ${isT?'is-today':''}" id="day-${d.d}" data-d="${d.d}" style="--c:${w.c}" ${open?'open':''}>
+  <summary><span class="dn"><small>DAY</small>${d.d}</span><span class="dt"><h3>${esc(d.topic)}${isT?'<span class="tag">TODAY</span>':''}</h3><p><span data-prog="${d.d}">${checked(d)}/${items(d)} done</span> · ${esc(fmt(dt))}${S.done[d.d]?' · ✔ complete':''}</p></span><span class="chev" aria-hidden="true">▸</span></summary>
+  <div class="body">
+   <div class="sched" aria-label="Six hour plan"><div><b>H1–2</b>Lecture: ${d.vids.length} video${d.vids.length>1?'s':''}</div><div><b>H3</b>Notes</div><div><b>H4–5</b>Practice: ${d.probs.length} problems</div><div><b>H6</b>Revise + no-hint problem</div></div>
+   <div class="cols">
+    <div><h4>Learning objectives</h4><ul class="objs">${d.obj.map(o=>`<li>${esc(o)}</li>`).join('')}</ul>
+     <h4>Hour 3 · Read &amp; revise</h4><div class="reads"><a href="${gs('geeksforgeeks.org',d.q)}" target="_blank" rel="noopener">GeeksforGeeks ↗</a><a href="${gs('cp-algorithms.com',d.q)}" target="_blank" rel="noopener">CP-Algorithms ↗</a><a href="https://www.youtube.com/results?search_query=${r}+explained" target="_blank" rel="noopener">Quick refresher video ↗</a></div>
+     <h4>Language tip</h4><div class="tip langtip" data-d="${d.d}">${tipHTML(d)}</div></div>
+    <div><h4>Hour 1–2 · Lectures</h4><ul class="items">${vids}</ul></div>
+   </div>
+   <h4>Hour 4–5 · Practice problems</h4><ul class="items">${pr}</ul>
+   <p class="hint6"><b>Hour 6:</b> pick one solved problem and re-solve it from scratch with no hints, then write a 3-line summary below: pattern, trick, complexity.</p>
+   <h4>Your notes</h4><textarea class="notes" data-notes="${d.d}" aria-label="Notes for day ${d.d}" placeholder="Pattern learned, mistakes, things to revise…">${esc(S.notes[d.d]||'')}</textarea>
+   <div class="dayfoot"><span class="prog" data-prog2="${d.d}">${checked(d)} of ${items(d)} items checked</span><button class="btn ${S.done[d.d]?'ghost':'accent'}" data-complete="${d.d}">${S.done[d.d]?'↺ Mark incomplete':'✔ Mark day complete'}</button></div>
+  </div></details>`;
+}
+function renderPlan(){
+  let shown=0;
+  $('#weeks').innerHTML=WEEKS.map(w=>{
+    const ds=weekDays(w.n).filter(dayMatches);shown+=ds.length;
+    if(!ds.length)return '';
+    return `<section class="week" style="--c:${w.c}" aria-label="${esc(w.name)}"><div class="week-h"><h2>${esc(w.name)}</h2><span>${esc(w.sub)}</span></div>${ds.map(d=>dayHTML(d,w)).join('')}</section>`}).join('')
+    ||'<div class="empty">No days match your search or filters. Try clearing them.</div>';
+  $('#count').textContent=`${shown} of 30 days shown`;
+}
+
+/* ----- mocks ----- */
+const timers={};
+function mockHTML(day){
+  const d=DAYS[day-1],m=d.mock,total=180*60,t=timers[m];
+  const rem=t?t.rem:(S.mock[m]?.rem??total);
+  return `<article class="mock" data-m="${m}" aria-label="Mock test ${m}"><div class="eyebrow">Day ${d.d}</div><h3>${esc(d.topic)}</h3>
+   <div class="clock ${rem<600?'low':''}" role="timer" aria-live="off" id="clock${m}">${clock(rem)}</div>
+   <div class="row"><button class="btn accent" data-mt="start" data-m="${m}">${t&&t.run?'⏸ Pause':'▶ Start'}</button><button class="btn ghost" data-mt="reset" data-m="${m}">Reset</button></div>
+   <ul class="items">${d.probs.map((p,i)=>`<li class="${S.checks[`p${d.d}-${i}`]?'on':''}"><input type="checkbox" data-k="p${d.d}-${i}" ${S.checks[`p${d.d}-${i}`]?'checked':''} aria-label="Solved: ${esc(p.t)}"><span class="pill" data-p="${p.p}">${p.p}</span><span class="nm"><a href="${esc(p.u)}" target="_blank" rel="noopener">${esc(p.t)}</a></span><span class="mins">${p.mins}m</span><span class="df ${p.d}">${p.d}</span></li>`).join('')}</ul>
+   <ul class="rules"><li>Solve in order or skip and return. Time-box strictly.</li><li>Score 1 point per accepted solution, hard counts as 2.</li><li>Review misses only after the clock stops.</li></ul></article>`;
+}
+const clock=s=>{s=Math.max(0,s);return `${pad(Math.floor(s/3600))}:${pad(Math.floor(s%3600/60))}:${pad(s%60)}`};
+function renderMocks(){$('#mocks').innerHTML=mockHTML(29)+mockHTML(30)}
+function mockTick(m){
+  const t=timers[m];if(!t||!t.run)return;
+  t.rem=Math.max(0,Math.round((t.end-Date.now())/1000));
+  const el=$('#clock'+m);if(el){el.textContent=clock(t.rem);el.classList.toggle('low',t.rem<600)}
+  S.mock[m]={rem:t.rem};save();
+  if(t.rem<=0){t.run=false;clearInterval(t.iv);renderMocks();alert('Time is up! Stop coding and review your solutions.')}
+}
+function mockAction(m,a){
+  const total=180*60;const t=timers[m]||(timers[m]={rem:S.mock[m]?.rem??total,run:false});
+  if(a==='start'){
+    if(t.run){t.run=false;clearInterval(t.iv);S.mock[m]={rem:t.rem};save()}
+    else{if(t.rem<=0)t.rem=total;t.run=true;t.end=Date.now()+t.rem*1000;t.iv=setInterval(()=>mockTick(m),500);logAct()}
+  }else{t.run=false;clearInterval(t.iv);t.rem=total;S.mock[m]={rem:total};save()}
+  renderMocks();
+}
+
+/* ----- resources ----- */
+function renderRes(){
+  $('#rgrid').innerHTML=RES.map(r=>`<div class="rcard"><h3>${esc(r.h)}</h3><ul>${r.l.map(([n,u,s])=>`<li><a href="${esc(u)}" target="_blank" rel="noopener">${esc(n)} ↗</a><small>${esc(s)}</small></li>`).join('')}</ul></div>`).join('');
+  $('#road').innerHTML=ROAD.map(p=>`<div class="ph" style="--c:${p.c}"><h4>${esc(p.h)}</h4><p>${esc(p.p)}</p></div>`).join('');
+}
+
+/* ----- refresh without losing focus ----- */
+function refresh(d){
+  renderDash();renderSide();
+  if(d){const D=DAYS[d-1];
+    $$(`[data-prog="${d}"]`).forEach(e=>e.textContent=`${checked(D)}/${items(D)} done`);
+    $$(`[data-prog2="${d}"]`).forEach(e=>e.textContent=`${checked(D)} of ${items(D)} items checked`)}
+}
+
+/* ----- events ----- */
+document.addEventListener('change',e=>{
+  const t=e.target;
+  if(t.matches('input[type=checkbox][data-k]')){
+    const k=t.dataset.k;if(t.checked){S.checks[k]=1;logAct()}else delete S.checks[k];
+    const d=+k.slice(1).split('-')[0];
+    $$(`[data-k="${k}"]`).forEach(c=>{c.checked=t.checked;c.closest('li').classList.toggle('on',t.checked)});
+    save();refresh(d);
+  }
+});
+document.addEventListener('input',e=>{
+  const t=e.target;
+  if(t.matches('textarea[data-notes]')){S.notes[t.dataset.notes]=t.value;if(t.value.trim())logAct();save()}
+});
+document.addEventListener('toggle',e=>{
+  const t=e.target;if(t.matches&&t.matches('details.day')){const d=+t.dataset.d;
+    if(t.open){openDays.add(d);openDays.delete(-d)}else{openDays.delete(d);openDays.add(-d)}}
+},true);
+document.addEventListener('click',e=>{
+  const t=e.target.closest('button,a');if(!t)return;
+  if(t.dataset.complete){const d=+t.dataset.complete;S.done[d]=!S.done[d];if(S.done[d])logAct();save();
+    const keep=window.scrollY;renderPlan();renderDash();renderSide();window.scrollTo(0,keep);}
+  else if(t.dataset.mt){mockAction(+t.dataset.m,t.dataset.mt)}
+  else if(t.dataset.lang){S.lang=t.dataset.lang;save();applyLang()}
+  else if(t.dataset.go){e.preventDefault();goDay(+t.dataset.go);document.body.classList.remove('menu');$('#menuBtn').setAttribute('aria-expanded','false')}
+});
+function goDay(n){
+  if(!$('#day-'+n)){filt.q=filt.diff=filt.plat='';$('#q').value='';$('#fDiff').value='';$('#fPlat').value='';renderPlan()}
+  openDays.add(n);openDays.delete(-n);
+  const el=$('#day-'+n);if(!el)return;el.open=true;el.scrollIntoView({behavior:'smooth',block:'start'});
+  history.replaceState(null,'','#day-'+n);
+}
+$('#themeBtn').onclick=()=>{S.theme=document.documentElement.dataset.theme==='dark'?'light':'dark';save();applyTheme()};
+$('#menuBtn').onclick=()=>{const o=document.body.classList.toggle('menu');$('#menuBtn').setAttribute('aria-expanded',o)};
+$('#scrim').onclick=()=>{document.body.classList.remove('menu');$('#menuBtn').setAttribute('aria-expanded','false')};
+document.addEventListener('keydown',e=>{if(e.key==='Escape')$('#scrim').click()});
+$('#startDate').onchange=e=>{if(e.target.value){S.start=e.target.value;save();renderPlan();renderDash();renderSide()}};
+$('#jumpToday').onclick=()=>{const n=todayNum();goDay(n<1?1:n>30?30:n)};
+let qt;$('#q').oninput=e=>{clearTimeout(qt);qt=setTimeout(()=>{filt.q=e.target.value.trim();renderPlan()},180)};
+$('#fDiff').onchange=e=>{filt.diff=e.target.value;renderPlan()};
+$('#fPlat').onchange=e=>{filt.plat=e.target.value;renderPlan()};
+$('#expandAll').onclick=()=>{$$('details.day').forEach(d=>d.open=true)};
+$('#collapseAll').onclick=()=>{$$('details.day').forEach(d=>d.open=false)};
+$('#exportBtn').onclick=()=>{
+  const blob=new Blob([JSON.stringify({app:'dsa30',version:1,exported:new Date().toISOString(),data:S},null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='dsa-30-progress-'+iso(new Date())+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);
+};
+$('#importBtn').onclick=()=>$('#importFile').click();
+$('#importFile').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{try{const j=JSON.parse(r.result);const d=j.data||j;
+    if(typeof d!=='object'||!d.checks)throw new Error('bad');
+    S=Object.assign(load.call(null),{start:d.start||S.start,lang:d.lang||S.lang,theme:d.theme||S.theme,checks:d.checks||{},notes:d.notes||{},done:d.done||{},act:d.act||{},mock:d.mock||{}});
+    save();init(true);alert('Progress imported.')}catch(err){alert('That file is not a valid progress export.')}};
+  r.readAsText(f);e.target.value='';
+};
+$('#resetBtn').onclick=()=>{if(confirm('Reset ALL progress, notes and streak on this browser? Export first if you want a backup.')){
+  localStorage.removeItem(KEY);S=load();Object.values(timers).forEach(t=>clearInterval(t.iv));for(const k in timers)delete timers[k];init(true)}};
+
+function init(re){
+  applyTheme();
+  $('#startDate').value=S.start;
+  const plats=[...new Set(DAYS.flatMap(d=>d.probs.map(p=>p.p)))].sort();
+  if(!re||$('#fPlat').options.length<2)$('#fPlat').innerHTML='<option value="">All platforms</option>'+plats.map(p=>`<option>${p}</option>`).join('');
+  renderDash();renderSide();renderPlan();renderMocks();renderRes();applyLang();
+}
+init();
+if(location.hash.startsWith('#day-')){const n=+location.hash.slice(5);if(n>=1&&n<=30)setTimeout(()=>goDay(n),50)}
+</script>
+</body>
+</html>
+'''
+
+def build(root: pathlib.Path) -> None:
+    for out in (root / "index.html", root / "docs" / "index.html"):
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(HTML, encoding="utf-8")
+        print("wrote", out)
+
+
+if __name__ == "__main__":
+    root = pathlib.Path(__file__).resolve().parent
+    build(root)
+    if "--serve" in sys.argv:
+        handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(root))
+        with socketserver.TCPServer(("", 8000), handler) as srv:
+            print("Open http://localhost:8000  (Ctrl+C to stop)")
+            srv.serve_forever()
